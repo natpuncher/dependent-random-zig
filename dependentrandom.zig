@@ -7,14 +7,12 @@ pub fn DependentRandom(max_event_size: usize) type {
         chances_buffer: [max_event_size]f32 = undefined,
         events: std.ArrayList(EventData(max_event_size)),
 
-        random: std.Random,
+        random: std.Random.Xoshiro256,
 
-        pub fn init(allocator: std.mem.Allocator) !This {
-            const seed: u64 = @intCast(std.time.milliTimestamp());
-            var prng = std.Random.DefaultPrng.init(seed);
+        pub fn init(allocator: std.mem.Allocator, seed: u64) !This {
             return This{
                 .events = std.ArrayList(EventData(max_event_size)).init(allocator),
-                .random = prng.random(),
+                .random = std.Random.DefaultPrng.init(seed),
             };
         }
 
@@ -97,7 +95,8 @@ pub fn DependentRandom(max_event_size: usize) type {
 
             var sum: f32 = 0;
             for (0..event.count) |i| {
-                const chance = Chances.getChance(event.chances[i]) * (event.history[i] + 1);
+                const history: f32 = @floatFromInt(event.history[i] + 1);
+                const chance = Chances.getChance(event.chances[i]) * history;
                 random.chances_buffer[i] = chance;
                 sum += chance;
             }
@@ -107,7 +106,7 @@ pub fn DependentRandom(max_event_size: usize) type {
                 }
             }
 
-            var value = random.random.float(f32);
+            var value = random.random.random().float(f32);
             var result = event.count - 1;
             if (event.count == 1) {
                 if (random.chances_buffer[0] > value) result = 1;
@@ -128,7 +127,7 @@ pub fn DependentRandom(max_event_size: usize) type {
 }
 
 test "single" {
-    var random = try DependentRandom(4).init(std.testing.allocator);
+    var random = try DependentRandom(4).init(std.testing.allocator, 123);
     defer random.deinit();
 
     const id = try random.register(0.12);
@@ -141,7 +140,7 @@ test "single" {
 }
 
 test "multy" {
-    var random = try DependentRandom(4).init(std.testing.allocator);
+    var random = try DependentRandom(4).init(std.testing.allocator, 123);
     defer random.deinit();
 
     var weights = [_]f32{ 100, 200, 700 };
@@ -150,6 +149,15 @@ test "multy" {
     try std.testing.expectApproxEqAbs(10, random.events.items[id].chances[0], 0.001);
     try std.testing.expectApproxEqAbs(20, random.events.items[id].chances[1], 0.001);
     try std.testing.expectApproxEqAbs(70, random.events.items[id].chances[2], 0.001);
+
+    const count = 1_000_000;
+    var results: [weights.len]f32 = std.mem.zeroes([weights.len]f32);
+    for (0..count) |_| {
+        results[random.roll(id)] += 1;
+    }
+    try std.testing.expectApproxEqAbs(0.1, results[0] / count, 0.01);
+    try std.testing.expectApproxEqAbs(0.2, results[1] / count, 0.01);
+    try std.testing.expectApproxEqAbs(0.7, results[2] / count, 0.01);
 }
 
 fn EventData(max_event_size: usize) type {
@@ -157,13 +165,13 @@ fn EventData(max_event_size: usize) type {
         const This = @This();
 
         chances: [max_event_size]f32,
-        history: [max_event_size]f32,
+        history: [max_event_size]u16,
         count: usize,
 
         pub fn init(count: usize) This {
             return This{
                 .chances = std.mem.zeroes([max_event_size]f32),
-                .history = std.mem.zeroes([max_event_size]f32),
+                .history = std.mem.zeroes([max_event_size]u16),
                 .count = @min(count, max_event_size),
             };
         }
