@@ -1,17 +1,17 @@
 const std = @import("std");
 
-pub fn DependentRandom(max_event_size: usize) type {
+pub fn DependentRandom(event_options_capacity: usize) type {
     return struct {
         const This = @This();
 
-        chances_buffer: [max_event_size]f32 = undefined,
-        events: std.ArrayList(EventData(max_event_size)),
+        chances_buffer: [event_options_capacity]f32 = undefined,
+        events: std.ArrayList(EventData(event_options_capacity)),
 
         random: std.Random.Xoshiro256,
 
         pub fn init(allocator: std.mem.Allocator, seed: u64) !This {
             return This{
-                .events = std.ArrayList(EventData(max_event_size)).init(allocator),
+                .events = std.ArrayList(EventData(event_options_capacity)).init(allocator),
                 .random = std.Random.DefaultPrng.init(seed),
             };
         }
@@ -22,7 +22,7 @@ pub fn DependentRandom(max_event_size: usize) type {
 
         // chance 0% - 100%
         pub fn register(random: *This, chance: f32) !usize {
-            var data = EventData(max_event_size).init(1);
+            var data = EventData(event_options_capacity).init(1);
             data.chances[0] = chance;
             const id = random.events.items.len;
             try random.events.append(data);
@@ -30,9 +30,9 @@ pub fn DependentRandom(max_event_size: usize) type {
         }
 
         pub fn registerMulti(random: *This, chances: []f32) !usize {
-            var data = EventData(max_event_size).init(chances.len);
+            var data = EventData(event_options_capacity).init(chances.len);
 
-            const count = @min(chances.len, max_event_size);
+            const count = @min(chances.len, event_options_capacity);
 
             var sum: f32 = 0;
             for (0..count) |i| {
@@ -48,7 +48,7 @@ pub fn DependentRandom(max_event_size: usize) type {
         }
 
         pub fn registerMultiEqual(random: *This, count: usize) !usize {
-            var data = EventData(max_event_size).init(count);
+            var data = EventData(event_options_capacity).init(count);
 
             const sum: f32 = @floatFromInt(data.count);
             for (0..count) |i| {
