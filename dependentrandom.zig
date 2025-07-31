@@ -481,9 +481,9 @@ test "get chance" {
     try std.testing.expectApproxEqAbs(Chances.Values[0], Chances.getChance(0.24), delta);
     try std.testing.expectApproxEqAbs(Chances.Values[1], Chances.getChance(0.25), delta);
 
-    std.debug.print("10 = {}", .{Chances.getChance(10)});
-    std.debug.print("15 = {}", .{Chances.getChance(15)});
-    std.debug.print("20 = {}", .{Chances.getChance(20)});
+    std.debug.print("10 = {}\n", .{Chances.getChance(10)});
+    std.debug.print("15 = {}\n", .{Chances.getChance(15)});
+    std.debug.print("20 = {}\n", .{Chances.getChance(20)});
 }
 
 test "last chance" {
