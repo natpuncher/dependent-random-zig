@@ -88,9 +88,11 @@ pub fn DependentRandom(event_options_capacity: usize) type {
             }
         }
 
-        // for single event returns 1 = true, 0 = false
-        // for multiple returns index in array
-        pub fn roll(random: *This, id: usize) usize {
+        pub fn roll(random: *This, id: usize) bool {
+            return random.rollMulti(id) == 1;
+        }
+
+        pub fn rollMulti(random: *This, id: usize) usize {
             var event = &random.events.items[id];
 
             var sum: f32 = 0;
@@ -158,6 +160,56 @@ test "multy" {
     try std.testing.expectApproxEqAbs(0.1, results[0] / count, 0.01);
     try std.testing.expectApproxEqAbs(0.2, results[1] / count, 0.01);
     try std.testing.expectApproxEqAbs(0.7, results[2] / count, 0.01);
+}
+
+test "validation" {
+    var dependent_random = try DependentRandom(1).init(std.testing.allocator, 123);
+    defer dependent_random.deinit();
+
+    var normal_random = std.Random.DefaultPrng.init(123);
+
+    const chance: f32 = 33;
+    const normalized_chance = chance * 0.01;
+    const id = try dependent_random.register(chance);
+
+    const iteration_count = 1_000_000;
+
+    var dependent_longest_same_roll_count: usize = 0;
+    var dependent_same_roll_count: usize = 0;
+    var dependent_last_roll: bool = false;
+
+    var normal_longest_same_roll_count: usize = 0;
+    var normal_same_roll_count: usize = 0;
+    var normal_last_roll: bool = false;
+
+    var success_count: usize = 0;
+    for (0..iteration_count) |_| {
+        const dependent_result = dependent_random.roll(id) == 1;
+
+        if (dependent_result) success_count += 1;
+        if (dependent_last_roll == dependent_result) {
+            dependent_same_roll_count += 1;
+            if (dependent_same_roll_count > dependent_longest_same_roll_count) dependent_longest_same_roll_count = dependent_same_roll_count;
+        } else {
+            dependent_last_roll = dependent_result;
+            dependent_same_roll_count = 0;
+        }
+
+        const normal_result = normalized_chance > normal_random.random().float(f32);
+        if (normal_last_roll == normal_result) {
+            normal_same_roll_count += 1;
+            if (normal_same_roll_count > normal_longest_same_roll_count) normal_longest_same_roll_count = normal_same_roll_count;
+        } else {
+            normal_last_roll = normal_result;
+            normal_same_roll_count = 0;
+        }
+    }
+
+    try std.testing.expect(normal_longest_same_roll_count > dependent_longest_same_roll_count);
+
+    const fcount: f32 = @floatFromInt(success_count);
+    std.debug.print("chance = {}%, dependent chance = {}%\n", .{ chance, (fcount / iteration_count) * 100 });
+    std.debug.print("dependent longest same roll = {} vs normal longest same roll = {}\n", .{ dependent_longest_same_roll_count, normal_longest_same_roll_count });
 }
 
 fn EventData(max_event_size: usize) type {
@@ -428,6 +480,10 @@ test "get chance" {
     try std.testing.expectApproxEqAbs(Chances.Values[0], Chances.getChance(0.12), delta);
     try std.testing.expectApproxEqAbs(Chances.Values[0], Chances.getChance(0.24), delta);
     try std.testing.expectApproxEqAbs(Chances.Values[1], Chances.getChance(0.25), delta);
+
+    std.debug.print("10 = {}", .{Chances.getChance(10)});
+    std.debug.print("15 = {}", .{Chances.getChance(15)});
+    std.debug.print("20 = {}", .{Chances.getChance(20)});
 }
 
 test "last chance" {
