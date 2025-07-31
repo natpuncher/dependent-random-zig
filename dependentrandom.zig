@@ -137,8 +137,8 @@ test "single" {
     try std.testing.expectApproxEqAbs(0.12, random.events.items[id].chances[0], 0.001);
     try std.testing.expectApproxEqAbs(0, Chances.getChance(random.events.items[id].chances[0]), 0.001);
     try std.testing.expectEqual(1, random.events.items[id].count);
-    try std.testing.expectEqual(0, random.roll(id));
-    try std.testing.expectEqual(1, random.roll(true_id));
+    try std.testing.expectEqual(false, random.roll(id));
+    try std.testing.expectEqual(true, random.roll(true_id));
 }
 
 test "multy" {
@@ -155,7 +155,7 @@ test "multy" {
     const count = 1_000_000;
     var results: [weights.len]f32 = std.mem.zeroes([weights.len]f32);
     for (0..count) |_| {
-        results[random.roll(id)] += 1;
+        results[random.rollMulti(id)] += 1;
     }
     try std.testing.expectApproxEqAbs(0.1, results[0] / count, 0.01);
     try std.testing.expectApproxEqAbs(0.2, results[1] / count, 0.01);
@@ -184,7 +184,7 @@ test "validation" {
 
     var success_count: usize = 0;
     for (0..iteration_count) |_| {
-        const dependent_result = dependent_random.roll(id) == 1;
+        const dependent_result = dependent_random.roll(id);
 
         if (dependent_result) success_count += 1;
         if (dependent_last_roll == dependent_result) {
