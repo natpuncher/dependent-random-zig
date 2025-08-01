@@ -64,7 +64,13 @@ pub fn DependentRandom(event_options_capacity: usize) type {
             return random.events.items[id].count;
         }
 
-        pub fn reset(random: *This, id: usize, chances: []f32) void {
+        pub fn reset(random: *This, id: usize, chance: f32) void {
+            var data = &random.events.items[id];
+            data.reset(1);
+            data.chances[0] = chance;
+        }
+
+        pub fn resetMulti(random: *This, id: usize, chances: []f32) void {
             var data = &random.events.items[id];
             data.reset(chances.len);
             const count = data.count;
