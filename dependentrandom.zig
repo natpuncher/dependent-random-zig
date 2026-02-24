@@ -9,23 +9,25 @@ pub fn DependentRandom(event_options_capacity: usize) type {
         events: std.ArrayList(EventData(event_options_capacity)),
 
         random: std.Random.Xoshiro256,
+        allocator: std.mem.Allocator,
 
         pub fn init(allocator: std.mem.Allocator, seed: u64) !This {
             return This{
-                .events = std.ArrayList(EventData(event_options_capacity)).init(allocator),
+                .events = std.ArrayList(EventData(event_options_capacity)).init(),
                 .random = std.Random.DefaultPrng.init(seed),
+                .allocator = allocator,
             };
         }
 
         pub fn deinit(random: *This) void {
-            random.events.deinit();
+            random.events.deinit(random.allocator);
         }
 
         pub fn register(random: *This, chance: f32) !usize {
             var data = EventData(event_options_capacity).init(1);
             data.chances[0] = chance;
             const id = random.events.items.len;
-            try random.events.append(data);
+            try random.events.append(random.allocator, data);
             return id;
         }
 
@@ -43,7 +45,7 @@ pub fn DependentRandom(event_options_capacity: usize) type {
             }
 
             const id = random.events.items.len;
-            try random.events.append(data);
+            try random.events.append(random.allocator, data);
             return id;
         }
 
@@ -56,7 +58,7 @@ pub fn DependentRandom(event_options_capacity: usize) type {
             }
 
             const id = random.events.items.len;
-            try random.events.append(data);
+            try random.events.append(random.allocator, data);
             return id;
         }
 
