@@ -13,7 +13,7 @@ pub fn DependentRandom(event_options_capacity: usize) type {
 
         pub fn init(allocator: std.mem.Allocator, seed: u64) !This {
             return This{
-                .events = std.ArrayList(EventData(event_options_capacity)).init(),
+                .events = .empty,
                 .random = std.Random.DefaultPrng.init(seed),
                 .allocator = allocator,
             };
