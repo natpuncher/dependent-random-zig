@@ -2,6 +2,8 @@ const std = @import("std");
 const Chances = @import("chances.zig").Chances;
 
 pub fn DependentRandom(event_options_capacity: usize) type {
+    if (event_options_capacity == 0) @compileError("event options capacity must be greater than zero");
+
     return struct {
         const This = @This();
 
@@ -40,7 +42,8 @@ pub fn DependentRandom(event_options_capacity: usize) type {
                 return random.events.items[event.id].count;
             }
 
-            pub fn reset(event: MultiEvent, random: *This, chances: []f32) void {
+            pub fn reset(event: MultiEvent, random: *This, chances: []const f32) void {
+                assertValidChances(chances);
                 var data = &random.events.items[event.id];
                 data.reset(chances.len);
                 const count = data.count;
@@ -55,6 +58,7 @@ pub fn DependentRandom(event_options_capacity: usize) type {
             }
 
             pub fn resetEqual(event: MultiEvent, random: *This, count: usize) void {
+                assertValidCount(count);
                 var data = &random.events.items[event.id];
                 data.reset(count);
 
@@ -65,7 +69,7 @@ pub fn DependentRandom(event_options_capacity: usize) type {
             }
         };
 
-        pub fn init(allocator: std.mem.Allocator, seed: u64) !This {
+        pub fn init(allocator: std.mem.Allocator, seed: u64) This {
             return This{
                 .events = .empty,
                 .random = std.Random.DefaultPrng.init(seed),
@@ -86,9 +90,10 @@ pub fn DependentRandom(event_options_capacity: usize) type {
         }
 
         pub fn registerMulti(random: *This, chances: []const f32) !MultiEvent {
+            assertValidChances(chances);
             var data = EventData(event_options_capacity).init(chances.len);
 
-            const count = @min(chances.len, event_options_capacity);
+            const count = chances.len;
 
             var sum: f32 = 0;
             for (0..count) |i| {
@@ -104,6 +109,7 @@ pub fn DependentRandom(event_options_capacity: usize) type {
         }
 
         pub fn registerMultiEqual(random: *This, count: usize) !MultiEvent {
+            assertValidCount(count);
             var data = EventData(event_options_capacity).init(count);
 
             const sum: f32 = @floatFromInt(data.count);
@@ -116,18 +122,34 @@ pub fn DependentRandom(event_options_capacity: usize) type {
             return .{ .id = id };
         }
 
+        fn assertValidCount(count: usize) void {
+            std.debug.assert(count > 0);
+            std.debug.assert(count <= event_options_capacity);
+        }
+
+        fn assertValidChances(chances: []const f32) void {
+            assertValidCount(chances.len);
+
+            var sum: f32 = 0;
+            for (chances) |chance| {
+                std.debug.assert(chance >= 0);
+                sum += chance;
+            }
+            std.debug.assert(std.math.isFinite(sum));
+            std.debug.assert(sum > 0);
+        }
+
         fn rollSingle(random: *This, id: usize) bool {
             return (random.rollMulti(id, .{}) orelse return false) == 1;
         }
 
         fn rollMulti(random: *This, id: usize, config: RollConfig) ?usize {
             var event = &random.events.items[id];
-            if (config.ignored) |ignored| std.debug.assert(ignored.len >= event.count);
 
             var sum: f64 = 0;
             for (0..event.count) |i| {
                 if (config.ignored) |ignored| {
-                    if (ignored[i]) continue;
+                    if (i < ignored.len and ignored[i]) continue;
                 }
 
                 const history: f64 = @floatFromInt(event.history[i] + 1);
@@ -144,7 +166,7 @@ pub fn DependentRandom(event_options_capacity: usize) type {
                 var value = random.random.random().float(f64) * sum;
                 for (0..event.count) |i| {
                     if (config.ignored) |ignored| {
-                        if (ignored[i]) continue;
+                        if (i < ignored.len and ignored[i]) continue;
                     }
 
                     const chance = random.chances_buffer[i];
@@ -167,7 +189,7 @@ pub fn DependentRandom(event_options_capacity: usize) type {
 }
 
 test "single" {
-    var random = try DependentRandom(4).init(std.testing.allocator, 123);
+    var random = DependentRandom(4).init(std.testing.allocator, 123);
     defer random.deinit();
 
     const event = try random.register(0);
@@ -180,7 +202,7 @@ test "single" {
 }
 
 test "multy" {
-    var random = try DependentRandom(4).init(std.testing.allocator, 123);
+    var random = DependentRandom(4).init(std.testing.allocator, 123);
     defer random.deinit();
 
     var weights = [_]f32{ 100, 200, 700 };
@@ -201,7 +223,7 @@ test "multy" {
 }
 
 test "multi equal" {
-    var random = try DependentRandom(4).init(std.testing.allocator, 123);
+    var random = DependentRandom(4).init(std.testing.allocator, 123);
     defer random.deinit();
 
     const event = try random.registerMultiEqual(3);
@@ -221,7 +243,7 @@ test "multi equal" {
 }
 
 test "multi equal ignores options without changing remaining chances" {
-    var random = try DependentRandom(3).init(std.testing.allocator, 123);
+    var random = DependentRandom(3).init(std.testing.allocator, 123);
     defer random.deinit();
 
     const event = try random.registerMultiEqual(3);
@@ -240,7 +262,7 @@ test "multi equal ignores options without changing remaining chances" {
 }
 
 test "validation" {
-    var dependent_random = try DependentRandom(1).init(std.testing.allocator, 123);
+    var dependent_random = DependentRandom(1).init(std.testing.allocator, 123);
     defer dependent_random.deinit();
 
     var normal_random = std.Random.DefaultPrng.init(123);
@@ -300,10 +322,11 @@ fn EventData(max_event_size: usize) type {
         count: usize,
 
         pub fn init(count: usize) This {
+            std.debug.assert(count > 0 and count <= max_event_size);
             return This{
                 .chances = std.mem.zeroes([max_event_size]f32),
                 .history = std.mem.zeroes([max_event_size]u16),
-                .count = @min(count, max_event_size),
+                .count = count,
             };
         }
 
@@ -327,7 +350,7 @@ fn EventData(max_event_size: usize) type {
 
         pub fn updateHistoryIgnoring(event: *This, id: usize, ignored: []const bool) void {
             for (0..event.count) |i| {
-                if (ignored[i]) continue;
+                if (i < ignored.len and ignored[i]) continue;
 
                 if (i == id) {
                     event.history[i] = 0;
@@ -338,10 +361,11 @@ fn EventData(max_event_size: usize) type {
         }
 
         pub fn reset(event: *This, count: usize) void {
+            std.debug.assert(count > 0 and count <= max_event_size);
             for (0..event.count) |i| {
                 event.history[i] = 0;
             }
-            event.count = @min(count, max_event_size);
+            event.count = count;
         }
     };
 }

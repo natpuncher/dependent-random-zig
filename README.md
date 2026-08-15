@@ -9,7 +9,7 @@ const DependentRandom = @import("dependent_random_zig").DependentRandom;
 
 const Random = DependentRandom(8); // maximum options per event
 
-var random = try Random.init(allocator, seed);
+var random = Random.init(allocator, seed);
 defer random.deinit();
 ```
 
