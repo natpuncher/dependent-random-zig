@@ -17,6 +17,13 @@ pub fn DependentRandom(event_options_capacity: usize) type {
             ignored: ?[]const bool = null,
         };
 
+        pub const ValidationError = error{
+            EmptyEvent,
+            TooManyOptions,
+            InvalidChance,
+            ZeroChanceSum,
+        };
+
         pub const SingleEvent = struct {
             id: usize,
 
@@ -42,23 +49,19 @@ pub fn DependentRandom(event_options_capacity: usize) type {
                 return random.events.items[event.id].count;
             }
 
-            pub fn reset(event: MultiEvent, random: *This, chances: []const f32) void {
-                assertValidChances(chances);
+            pub fn reset(event: MultiEvent, random: *This, chances: []const f32) ValidationError!void {
+                const sum = try validateChances(chances);
                 var data = &random.events.items[event.id];
                 data.reset(chances.len);
                 const count = data.count;
 
-                var sum: f32 = 0;
-                for (0..count) |i| {
-                    sum += chances[i];
-                }
                 for (0..count) |i| {
                     data.chances[i] = chances[i] / sum;
                 }
             }
 
-            pub fn resetEqual(event: MultiEvent, random: *This, count: usize) void {
-                assertValidCount(count);
+            pub fn resetEqual(event: MultiEvent, random: *This, count: usize) ValidationError!void {
+                try validateCount(count);
                 var data = &random.events.items[event.id];
                 data.reset(count);
 
@@ -90,15 +93,11 @@ pub fn DependentRandom(event_options_capacity: usize) type {
         }
 
         pub fn registerMulti(random: *This, chances: []const f32) !MultiEvent {
-            assertValidChances(chances);
+            const sum = try validateChances(chances);
             var data = EventData(event_options_capacity).init(chances.len);
 
             const count = chances.len;
 
-            var sum: f32 = 0;
-            for (0..count) |i| {
-                sum += chances[i];
-            }
             for (0..count) |i| {
                 data.chances[i] = chances[i] / sum;
             }
@@ -109,7 +108,7 @@ pub fn DependentRandom(event_options_capacity: usize) type {
         }
 
         pub fn registerMultiEqual(random: *This, count: usize) !MultiEvent {
-            assertValidCount(count);
+            try validateCount(count);
             var data = EventData(event_options_capacity).init(count);
 
             const sum: f32 = @floatFromInt(data.count);
@@ -122,21 +121,22 @@ pub fn DependentRandom(event_options_capacity: usize) type {
             return .{ .id = id };
         }
 
-        fn assertValidCount(count: usize) void {
-            std.debug.assert(count > 0);
-            std.debug.assert(count <= event_options_capacity);
+        fn validateCount(count: usize) ValidationError!void {
+            if (count == 0) return error.EmptyEvent;
+            if (count > event_options_capacity) return error.TooManyOptions;
         }
 
-        fn assertValidChances(chances: []const f32) void {
-            assertValidCount(chances.len);
+        fn validateChances(chances: []const f32) ValidationError!f32 {
+            try validateCount(chances.len);
 
             var sum: f32 = 0;
             for (chances) |chance| {
-                std.debug.assert(chance >= 0);
+                if (!std.math.isFinite(chance) or chance < 0) return error.InvalidChance;
                 sum += chance;
             }
-            std.debug.assert(std.math.isFinite(sum));
-            std.debug.assert(sum > 0);
+            if (!std.math.isFinite(sum)) return error.InvalidChance;
+            if (sum == 0) return error.ZeroChanceSum;
+            return sum;
         }
 
         fn rollSingle(random: *This, id: usize) bool {
